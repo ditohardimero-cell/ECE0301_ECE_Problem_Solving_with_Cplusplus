@@ -1,0 +1,4 @@
+Files not included in this zip file because they couldn’t be found:
+- outputs/problem10_submissions/problem10_submissions.zip
+
+To get a file on this list, ask Claude to make it again in the original chat.

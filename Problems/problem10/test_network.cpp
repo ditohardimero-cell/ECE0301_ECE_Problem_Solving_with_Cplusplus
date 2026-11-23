@@ -344,3 +344,60 @@ TEST_CASE("Network: Test CurrentDivider constructor exceptions", "[network]")
   double bad[2] = {100, -200};
   REQUIRE_THROWS_AS(CurrentDivider(0.006, bad, 2), std::invalid_argument);
 }
+
+TEST_CASE("Network: Test PracticalVsCircuit", "[network]")
+{
+  // VS = 12 V, RS = 1000 ohm, RL = 2000 ohm
+  PracticalVsCircuit pvs(12.0, 1000.0, 2000.0);
+
+  // terminal voltage and load power after construction
+  REQUIRE(compare_double(pvs.get_source_voltage(), 8.0));
+  REQUIRE(compare_double(pvs.get_load_power(), 64.0 / 2000));
+
+  // after changing the load
+  pvs.set_load(3000);
+  REQUIRE(compare_double(pvs.get_resistance(1), 3000));
+  REQUIRE(compare_double(pvs.get_source_voltage(), 9.0));
+  REQUIRE(compare_double(pvs.get_load_power(), 81.0 / 3000));
+
+  // maximum power transfer: Pmax = 144 / 4000 = 0.036 W, reached when RL = RS
+  REQUIRE_FALSE(pvs.maximum_power_transfer(900));
+  REQUIRE(compare_double(pvs.get_resistance(1), 900));
+  REQUIRE(pvs.maximum_power_transfer(1000));
+  REQUIRE(compare_double(pvs.get_resistance(1), 1000));
+  REQUIRE(compare_double(pvs.get_load_power(), 0.036));
+
+  // exceptions
+  REQUIRE_THROWS_AS(pvs.set_load(-100), std::invalid_argument);
+  REQUIRE_THROWS_AS(pvs.maximum_power_transfer(-100), std::invalid_argument);
+  REQUIRE_THROWS_AS(PracticalVsCircuit(12.0, -1000.0, 2000.0), std::invalid_argument);
+  REQUIRE_THROWS_AS(PracticalVsCircuit(12.0, 1000.0, -2000.0), std::invalid_argument);
+}
+
+TEST_CASE("Network: Test static and dynamic binding", "[network]")
+{
+  VoltageDivider *div_ptr = new PracticalVsCircuit(12.0, 1000.0, 2000.0);
+  // dynamic binding: the PracticalVsCircuit version runs
+  REQUIRE(compare_double(div_ptr->get_source_voltage(), 8.0));
+  // qualified call: bound at compile time to the VoltageDivider version
+  REQUIRE(compare_double(div_ptr->VoltageDivider::get_source_voltage(), 12.0));
+
+  Network *net_ptr = new PracticalVsCircuit(12.0, 1000.0, 2000.0);
+  REQUIRE(compare_double(net_ptr->get_node_voltage(1), 12.0));
+  REQUIRE(compare_double(net_ptr->get_node_voltage(2), 8.0));
+
+  // safe because ~Network is virtual
+  delete div_ptr;
+  delete net_ptr;
+}
+
+TEST_CASE("Network: Test reference and pointer to Resistor", "[network]")
+{
+  Resistor r;
+  Component &c_ref = r;
+  Component *c_ptr = &r;
+
+  REQUIRE_THROWS_AS(c_ref.set_value(-1), std::invalid_argument);
+  REQUIRE_THROWS_AS(c_ptr->set_value(-1), std::invalid_argument);
+  REQUIRE(compare_double(r.get_value(), 0));
+}
