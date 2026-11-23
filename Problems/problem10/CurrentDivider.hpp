@@ -8,7 +8,11 @@
 class CurrentDivider : public Network
 {
 private:
-  // TODO: little to no here, only add private ones when necessary
+  // Recompute the voltage of node 1 from the source and resistor values.
+  void update_node_voltages();
+
+  // Throw std::out_of_range if idx is not a valid resistor index.
+  void check_resistor_idx(int idx) const;
 
 public:
   CurrentDivider(double c, double res[], int num_res);

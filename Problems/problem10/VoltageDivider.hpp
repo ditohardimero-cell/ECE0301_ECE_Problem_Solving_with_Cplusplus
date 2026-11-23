@@ -8,7 +8,11 @@
 class VoltageDivider : public Network
 {
 private:
-  // TODO: little to no here, only add private ones when necessary
+  // Recompute every node voltage from the source and resistor values.
+  void update_node_voltages();
+
+  // Throw std::out_of_range if idx is not a valid resistor index.
+  void check_resistor_idx(int idx) const;
 
 public:
   VoltageDivider(double v, double res[], int num_res);

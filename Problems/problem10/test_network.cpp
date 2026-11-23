@@ -197,24 +197,150 @@ TEST_CASE("Network: Test overriding and dynamic binding", "[network]")
 
 // Write your own test cases here.
 
-// Uncomment these partial test cases when you are ready to test the dividers.
+TEST_CASE("Network: Test VoltageDivider", "[network]")
+{
+  double voltage = 5.0;
+  const int num = 2;
+  double res[num] = {200, 400};
+  VoltageDivider div(voltage, res, num);
 
-// TEST_CASE("Network: Test VoltageDivider", "[network]")
-// {
-//   double voltage = 5.0;
-//   const int num = 2;
-//   double res[num] = {200, 400};
-//   VoltageDivider div(voltage, res, num);
+  // structure: ground + one node per resistor, source + resistors
+  REQUIRE(div.get_num_resistors() == 2);
+  REQUIRE(div.get_num_nodes() == 3);
+  REQUIRE(div.get_num_components() == 3);
 
-//   // TODO
-// }
+  // values after construction
+  REQUIRE(compare_double(div.get_source_voltage(), 5.0));
+  REQUIRE(compare_double(div.get_resistance(0), 200));
+  REQUIRE(compare_double(div.get_resistance(1), 400));
+  REQUIRE(compare_double(div.get_loop_current(), 5.0 / 600));
+  REQUIRE(compare_double(div.get_resistor_voltage(0), 5.0 * 200 / 600));
+  REQUIRE(compare_double(div.get_resistor_voltage(1), 5.0 * 400 / 600));
+  REQUIRE(compare_double(div.get_node_voltage(0), 0));
+  REQUIRE(compare_double(div.get_node_voltage(1), 5.0));
+  REQUIRE(compare_double(div.get_node_voltage(2), 5.0 * 400 / 600));
 
-// TEST_CASE("Network: Test CurrentDivider", "[network]")
-// {
-//   double current = 0.006;
-//   const int num = 2;
-//   double res[num] = {15000, 75000};
-//   CurrentDivider div(current, res, num);
+  // change the source voltage and one resistance
+  div.set_source_voltage(10.0);
+  REQUIRE(compare_double(div.get_source_voltage(), 10.0));
+  REQUIRE(compare_double(div.get_resistor_voltage(1), 10.0 * 400 / 600));
+  div.set_resistance(1, 800);
+  REQUIRE(compare_double(div.get_resistance(1), 800));
+  REQUIRE(compare_double(div.get_loop_current(), 10.0 / 1000));
+  REQUIRE(compare_double(div.get_resistor_voltage(0), 2.0));
+  REQUIRE(compare_double(div.get_resistor_voltage(1), 8.0));
+  REQUIRE(compare_double(div.get_node_voltage(2), 8.0));
 
-//   // TODO
-// }
+  // invalid indices
+  REQUIRE_THROWS_AS(div.get_resistance(-1), std::out_of_range);
+  REQUIRE_THROWS_AS(div.get_resistance(2), std::out_of_range);
+  REQUIRE_THROWS_AS(div.get_resistor_voltage(-1), std::out_of_range);
+  REQUIRE_THROWS_AS(div.get_resistor_voltage(2), std::out_of_range);
+  REQUIRE_THROWS_AS(div.set_resistance(-1, 100), std::out_of_range);
+  REQUIRE_THROWS_AS(div.set_resistance(2, 100), std::out_of_range);
+
+  // negative resistance is rejected and nothing changes
+  REQUIRE_THROWS_AS(div.set_resistance(0, -100), std::invalid_argument);
+  REQUIRE(compare_double(div.get_resistance(0), 200));
+  REQUIRE(compare_double(div.get_resistor_voltage(0), 2.0));
+}
+
+TEST_CASE("Network: Test VoltageDivider with three resistors", "[network]")
+{
+  double res[3] = {1000, 2000, 3000};
+  VoltageDivider div(12.0, res, 3);
+
+  REQUIRE(div.get_num_nodes() == 4);
+  REQUIRE(div.get_num_components() == 4);
+  REQUIRE(compare_double(div.get_loop_current(), 0.002));
+  REQUIRE(compare_double(div.get_node_voltage(0), 0));
+  REQUIRE(compare_double(div.get_node_voltage(1), 12));
+  REQUIRE(compare_double(div.get_node_voltage(2), 10));
+  REQUIRE(compare_double(div.get_node_voltage(3), 6));
+  REQUIRE(compare_double(div.get_resistor_voltage(0), 2));
+  REQUIRE(compare_double(div.get_resistor_voltage(1), 4));
+  REQUIRE(compare_double(div.get_resistor_voltage(2), 6));
+}
+
+TEST_CASE("Network: Test VoltageDivider constructor exceptions", "[network]")
+{
+  double res[2] = {100, 200};
+  REQUIRE_THROWS_AS(VoltageDivider(5.0, res, 0), std::invalid_argument);
+  REQUIRE_THROWS_AS(VoltageDivider(5.0, res, -1), std::invalid_argument);
+
+  double bad[2] = {100, -200};
+  REQUIRE_THROWS_AS(VoltageDivider(5.0, bad, 2), std::invalid_argument);
+}
+
+TEST_CASE("Network: Test CurrentDivider", "[network]")
+{
+  double current = 0.006;
+  const int num = 2;
+  double res[num] = {15000, 75000};
+  CurrentDivider div(current, res, num);
+
+  // structure: ground and one shared node, source + resistors
+  REQUIRE(div.get_num_resistors() == 2);
+  REQUIRE(div.get_num_nodes() == 2);
+  REQUIRE(div.get_num_components() == 3);
+
+  // values after construction: Req = 12500 ohm, V = 75 V
+  REQUIRE(compare_double(div.get_source_current(), 0.006));
+  REQUIRE(compare_double(div.get_resistance(0), 15000));
+  REQUIRE(compare_double(div.get_resistance(1), 75000));
+  REQUIRE(compare_double(div.get_resistor_voltage(), 75.0));
+  REQUIRE(compare_double(div.get_resistor_current(0), 0.005));
+  REQUIRE(compare_double(div.get_resistor_current(1), 0.001));
+  REQUIRE(compare_double(div.get_node_voltage(0), 0));
+  REQUIRE(compare_double(div.get_node_voltage(1), 75.0));
+
+  // change the source current
+  div.set_source_current(0.012);
+  REQUIRE(compare_double(div.get_source_current(), 0.012));
+  REQUIRE(compare_double(div.get_resistor_voltage(), 150.0));
+  REQUIRE(compare_double(div.get_resistor_current(0), 0.01));
+  REQUIRE(compare_double(div.get_resistor_current(1), 0.002));
+
+  // change one resistance: Req = 7500 ohm
+  div.set_resistance(1, 15000);
+  REQUIRE(compare_double(div.get_resistance(1), 15000));
+  REQUIRE(compare_double(div.get_resistor_voltage(), 90.0));
+  REQUIRE(compare_double(div.get_resistor_current(0), 0.006));
+  REQUIRE(compare_double(div.get_resistor_current(1), 0.006));
+
+  // invalid indices
+  REQUIRE_THROWS_AS(div.get_resistance(-1), std::out_of_range);
+  REQUIRE_THROWS_AS(div.get_resistance(2), std::out_of_range);
+  REQUIRE_THROWS_AS(div.get_resistor_current(-1), std::out_of_range);
+  REQUIRE_THROWS_AS(div.get_resistor_current(2), std::out_of_range);
+  REQUIRE_THROWS_AS(div.set_resistance(-1, 100), std::out_of_range);
+  REQUIRE_THROWS_AS(div.set_resistance(2, 100), std::out_of_range);
+
+  // negative resistance is rejected and nothing changes
+  REQUIRE_THROWS_AS(div.set_resistance(0, -100), std::invalid_argument);
+  REQUIRE(compare_double(div.get_resistance(0), 15000));
+  REQUIRE(compare_double(div.get_resistor_voltage(), 90.0));
+}
+
+TEST_CASE("Network: Test CurrentDivider with three resistors", "[network]")
+{
+  double res[3] = {1000, 2000, 2000};
+  CurrentDivider div(0.006, res, 3);
+
+  // Req = 500 ohm, V = 3 V
+  REQUIRE(div.get_num_resistors() == 3);
+  REQUIRE(compare_double(div.get_resistor_voltage(), 3.0));
+  REQUIRE(compare_double(div.get_resistor_current(0), 0.003));
+  REQUIRE(compare_double(div.get_resistor_current(1), 0.0015));
+  REQUIRE(compare_double(div.get_resistor_current(2), 0.0015));
+}
+
+TEST_CASE("Network: Test CurrentDivider constructor exceptions", "[network]")
+{
+  double res[2] = {100, 200};
+  REQUIRE_THROWS_AS(CurrentDivider(0.006, res, 0), std::invalid_argument);
+  REQUIRE_THROWS_AS(CurrentDivider(0.006, res, -1), std::invalid_argument);
+
+  double bad[2] = {100, -200};
+  REQUIRE_THROWS_AS(CurrentDivider(0.006, bad, 2), std::invalid_argument);
+}
